@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+**/target/
+**/logs/
+**/dbt_packages/
+Untitled*.sql

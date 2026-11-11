@@ -1,0 +1,11 @@
+version: 2
+models:
+  - name: slv_account
+    description: "Account change log; a row is inserted only when attributes change. Key = SLSFRC_ID + EFECTIVE_DT"
+    columns:
+      - name: slsfrc_id
+        tests: [not_null]
+      - name: efective_dt
+        tests: [not_null]
+      - name: row_hash
+        tests: [not_null]

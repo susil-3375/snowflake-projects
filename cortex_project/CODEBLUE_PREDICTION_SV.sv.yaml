@@ -1,0 +1,478 @@
+name: CODEBLUE_PREDICTION_SV
+description: "Semantic view for Code Blue patient risk prediction analytics. This view combines patient demographic information, hospitalization details, flowsheet measurements, laboratory parameters, machine learning prediction outcomes, prediction probabilities, model metadata, and scoring information. The view enables clinicians, analysts, and operational teams to explore patient risk factors, identify high-risk patients, analyze prediction trends, and generate insights using natural language queries through Cortex Analyst."
+tables:
+  - name: PREDICTIONS
+    synonyms:
+      - patients
+      - code blue predictions
+      - patient risk scores
+    description: "One row per patient encounter scored by the Code Blue ML model, with demographics, admission/discharge dates, latest flowsheet vitals, lab results, actual outcome, predicted outcome, probability and SHAP explainability."
+    base_table:
+      database: DEMO_DB
+      schema: CLINIC
+      table: CODEBLUE_PREDICTION_RESULTS
+    primary_key:
+      columns:
+        - PRIMARYMRN
+    dimensions:
+      - name: ACTUAL_CODEBLUE
+        synonyms:
+          - actual outcome
+          - had code blue
+          - cardiac arrest
+        description: "Whether the patient actually experienced a Code Blue event. Values: Yes, No."
+        expr: "IFF(CODEBLUE = 1, 'Yes', 'No')"
+        data_type: VARCHAR(3)
+        access_modifier: public_access
+      - name: ADMISSION_MONTH
+        description: "Month of admission, for monthly risk trends."
+        expr: "DATE_TRUNC('month', ENTRY_DATE)"
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: AGE_GROUP
+        synonyms:
+          - age band
+          - age bracket
+        description: "Age band of the patient. Values: 18-39, 40-64, 65-79, 80+."
+        expr: CASE WHEN AGE < 40 THEN '18-39' WHEN AGE < 65 THEN '40-64' WHEN AGE < 80 THEN '65-79' ELSE '80+' END
+        data_type: VARCHAR(5)
+        access_modifier: public_access
+      - name: BIRTH_DATE
+        synonyms:
+          - date of birth
+          - DOB
+        description: Patient date of birth.
+        expr: BIRTHDATE
+        data_type: DATE
+        access_modifier: public_access
+      - name: BLOOD_CULTURE
+        synonyms:
+          - blood culture result
+          - bacteremia
+        description: "Blood culture result flag: 1 = positive, 0 = negative."
+        expr: BLOOD_CULTURE
+        data_type: "NUMBER(38,0)"
+        access_modifier: public_access
+      - name: DISCHARGE_DATE
+        description: Timestamp the patient was discharged from the hospital.
+        expr: DISCHARGE_DATE
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: ENTRY_DATE
+        synonyms:
+          - admission date
+          - admit date
+        description: Timestamp the patient was admitted to the hospital.
+        expr: ENTRY_DATE
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: EXPLAINABILITY_JSON
+        description: "SHAP explainability JSON with top_drivers (feature, value, contribution, direction increases/decreases risk)."
+        expr: TO_JSON(EXPLAINABILITY_ATTRIBUTES)
+        data_type: VARCHAR(134217728)
+        access_modifier: public_access
+      - name: EXPLANATION_METHOD
+        description: Explainability method used to derive risk drivers (e.g. SHAP).
+        expr: EXPLAINABILITY_ATTRIBUTES:method::STRING
+        data_type: VARCHAR(134217728)
+        access_modifier: public_access
+      - name: GENDER
+        synonyms:
+          - sex
+        description: "Patient gender. Values: Male, Female."
+        expr: GENDER
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: MODEL_VERSION
+        synonyms:
+          - model
+          - model name
+        description: "Name/version of the ML model that produced the score, e.g. CODEBLUE_MODEL/V1_0."
+        expr: MODEL_VERSION
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: PREDICTED_CODEBLUE
+        synonyms:
+          - prediction
+          - predicted outcome
+        description: "Whether the model predicted a Code Blue event. Values: Yes, No."
+        expr: "IFF(CODEBLUE_PREDICTION = 1, 'Yes', 'No')"
+        data_type: VARCHAR(3)
+        access_modifier: public_access
+      - name: PREDICTION_OUTCOME
+        synonyms:
+          - confusion matrix
+          - prediction correctness
+        description: "Comparison of predicted vs actual Code Blue: True Positive, True Negative, False Positive, False Negative."
+        expr: |-
+          CASE
+                  WHEN CODEBLUE = 1 AND CODEBLUE_PREDICTION = 1 THEN 'True Positive'
+                  WHEN CODEBLUE = 0 AND CODEBLUE_PREDICTION = 0 THEN 'True Negative'
+                  WHEN CODEBLUE = 0 AND CODEBLUE_PREDICTION = 1 THEN 'False Positive'
+                  ELSE 'False Negative' END
+        data_type: VARCHAR(14)
+        access_modifier: public_access
+      - name: PRIMARY_MRN
+        synonyms:
+          - MRN
+          - medical record number
+          - patient id
+        description: Primary medical record number uniquely identifying the patient.
+        expr: PRIMARYMRN
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: PROBABILITY_BUCKET
+        description: Code Blue probability rounded down to 0.1 buckets (0.0-0.9) for distribution analysis.
+        expr: FLOOR(CODEBLUE_PROBABILITY * 10) / 10
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: RISK_BAND
+        synonyms:
+          - risk level
+          - risk category
+          - risk band
+          - risk tier
+        description: "Risk band from Code Blue probability: High (>= 0.7 / 70%), Medium (> 0.3 and < 0.7), Low (<= 0.3 / 30%). Use High for high-risk patient questions."
+        expr: CASE WHEN CODEBLUE_PROBABILITY >= 0.7 THEN 'High' WHEN CODEBLUE_PROBABILITY > 0.3 THEN 'Medium' ELSE 'Low' END
+        data_type: VARCHAR(6)
+        access_modifier: public_access
+      - name: SCORING_TIMESTAMP
+        synonyms:
+          - scored at
+          - prediction time
+        description: Timestamp when the model scored the patient.
+        expr: SCORING_TIMESTAMP
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: TOP_RISK_DRIVER_1
+        synonyms:
+          - main risk factor
+          - top driver
+          - primary risk driver
+        description: "Feature with the largest SHAP contribution for this patient (e.g. BUN, PULSE_OXIMETRY)."
+        expr: "EXPLAINABILITY_ATTRIBUTES:top_drivers[0]:feature::STRING"
+        data_type: VARCHAR(134217728)
+        access_modifier: public_access
+      - name: TOP_RISK_DRIVER_2
+        description: Feature with the second-largest SHAP contribution for this patient.
+        expr: "EXPLAINABILITY_ATTRIBUTES:top_drivers[1]:feature::STRING"
+        data_type: VARCHAR(134217728)
+        access_modifier: public_access
+      - name: TOP_RISK_DRIVER_3
+        description: Feature with the third-largest SHAP contribution for this patient.
+        expr: "EXPLAINABILITY_ATTRIBUTES:top_drivers[2]:feature::STRING"
+        data_type: VARCHAR(134217728)
+        access_modifier: public_access
+    facts:
+      - name: ABS_LYMPHOCYTE
+        synonyms:
+          - lymphocyte count
+          - ALC
+        description: Absolute lymphocyte count lab result (10^3/uL).
+        expr: ABS_LYMPHOCYTE
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: ABS_NEUTROPHIL
+        synonyms:
+          - neutrophil count
+          - ANC
+        description: Absolute neutrophil count lab result (10^3/uL).
+        expr: ABS_NEUTROPHIL
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: ACTUAL_CODEBLUE_FLAG
+        description: "Numeric actual Code Blue outcome (1 = occurred, 0 = did not)."
+        expr: CODEBLUE
+        data_type: "NUMBER(38,0)"
+        access_modifier: public_access
+      - name: AGE_YEARS
+        description: Patient age in years at time of admission (range 18-98).
+        expr: AGE
+        data_type: "NUMBER(38,0)"
+        access_modifier: public_access
+      - name: ALBUMIN
+        description: Serum albumin lab result (g/dL). Low values indicate poor nutritional/inflammatory status.
+        expr: ALBUMIN
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: BLOOD_CULTURE_FLAG
+        description: "Numeric blood culture result (1 = positive, 0 = negative)."
+        expr: BLOOD_CULTURE
+        data_type: "NUMBER(38,0)"
+        access_modifier: public_access
+      - name: BNP
+        synonyms:
+          - B-type natriuretic peptide
+          - brain natriuretic peptide
+        description: BNP lab result (pg/mL); elevated values indicate heart failure.
+        expr: BNP
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: BUN
+        synonyms:
+          - blood urea nitrogen
+          - urea
+        description: Blood urea nitrogen lab result (mg/dL); elevated values indicate renal dysfunction.
+        expr: BUN
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: CALCIUM
+        description: Serum calcium lab result (mg/dL).
+        expr: CALCIUM
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: CODEBLUE_PROBABILITY
+        synonyms:
+          - probability
+          - code blue risk
+          - predicted probability
+        description: Model-predicted probability (0-1) that the patient will experience a Code Blue event. Higher means higher risk.
+        expr: CODEBLUE_PROBABILITY
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: DIASTOLIC_BP
+        synonyms:
+          - DBP
+          - diastolic blood pressure
+        description: Flowsheet diastolic blood pressure in mmHg.
+        expr: DIASTOLIC_BP
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: HEIGHT_CMS
+        description: Patient height in centimeters.
+        expr: HEIGHT_CMS
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: LENGTH_OF_STAY_DAYS
+        synonyms:
+          - LOS
+          - days in hospital
+        description: "Hospital length of stay in days, computed from hours between admission and discharge divided by 24, rounded to 1 decimal."
+        expr: "ROUND(DATEDIFF('hour', ENTRY_DATE, DISCHARGE_DATE) / 24, 1)"
+        data_type: "NUMBER(16,1)"
+        access_modifier: public_access
+      - name: O2_FLOW_RATE
+        synonyms:
+          - oxygen flow
+          - supplemental oxygen
+        description: Supplemental oxygen flow rate in liters per minute; 0 means room air.
+        expr: O2_FLOW_RATE
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: PREDICTED_CODEBLUE_FLAG
+        description: "Numeric predicted Code Blue outcome (1 = predicted, 0 = not predicted)."
+        expr: CODEBLUE_PREDICTION
+        data_type: "NUMBER(38,0)"
+        access_modifier: public_access
+      - name: PULSE
+        synonyms:
+          - heart rate
+          - HR
+        description: Flowsheet heart rate in beats per minute. Above 100 indicates tachycardia.
+        expr: PULSE
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: PULSE_OXIMETRY
+        synonyms:
+          - SpO2
+          - oxygen saturation
+          - O2 sat
+        description: Flowsheet peripheral oxygen saturation percentage. Below 92 suggests hypoxemia.
+        expr: PULSE_OXIMETRY
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: RESPIRATION
+        synonyms:
+          - respiratory rate
+          - RR
+          - breaths per minute
+        description: Flowsheet respiratory rate in breaths per minute. Normal adult range 12-20.
+        expr: RESPIRATION
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: RISK_SCORE_PCT
+        synonyms:
+          - risk score
+          - risk score percent
+          - risk percentage
+          - patient risk score
+        description: "Patient risk score as a percentage (0-100): Code Blue probability x 100, rounded to 1 decimal."
+        expr: "ROUND(CODEBLUE_PROBABILITY * 100, 1)"
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: SHOCK_INDEX
+        description: Shock index = heart rate / systolic BP. Values above 0.9 indicate elevated risk of hemodynamic instability.
+        expr: "PULSE / NULLIF(SYSTOLIC_BP, 0)"
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: SYSTOLIC_BP
+        synonyms:
+          - SBP
+          - systolic blood pressure
+        description: Flowsheet systolic blood pressure in mmHg. Below 90 indicates hypotension.
+        expr: SYSTOLIC_BP
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: TEMPERATURE
+        synonyms:
+          - body temperature
+          - temp
+        description: Flowsheet body temperature reading.
+        expr: TEMPERATURE
+        data_type: FLOAT
+        access_modifier: public_access
+      - name: WEIGHT_LBS
+        description: Patient body weight in pounds.
+        expr: WEIGHT_LBS
+        data_type: FLOAT
+        access_modifier: public_access
+    metrics:
+      - name: ACTUAL_CODEBLUE_COUNT
+        description: Number of actual Code Blue events.
+        expr: SUM(predictions.actual_codeblue_flag)
+        access_modifier: public_access
+      - name: ACTUAL_CODEBLUE_RATE
+        description: Share of patients with an actual Code Blue (0-1).
+        expr: AVG(predictions.actual_codeblue_flag)
+        access_modifier: public_access
+      - name: AVG_AGE
+        description: Average patient age.
+        expr: AVG(predictions.age_years)
+        access_modifier: public_access
+      - name: AVG_ALBUMIN
+        description: Average albumin.
+        expr: AVG(predictions.albumin)
+        access_modifier: public_access
+      - name: AVG_BNP
+        description: Average BNP.
+        expr: AVG(predictions.bnp)
+        access_modifier: public_access
+      - name: AVG_BUN
+        description: Average BUN.
+        expr: AVG(predictions.bun)
+        access_modifier: public_access
+      - name: AVG_CODEBLUE_PROBABILITY
+        synonyms:
+          - average probability
+        description: Average predicted Code Blue probability.
+        expr: AVG(predictions.codeblue_probability)
+        access_modifier: public_access
+      - name: AVG_LENGTH_OF_STAY
+        synonyms:
+          - ALOS
+        description: Average length of stay in days.
+        expr: AVG(predictions.length_of_stay_days)
+        access_modifier: public_access
+      - name: AVG_PULSE
+        description: Average heart rate.
+        expr: AVG(predictions.pulse)
+        access_modifier: public_access
+      - name: AVG_PULSE_OXIMETRY
+        description: Average SpO2.
+        expr: AVG(predictions.pulse_oximetry)
+        access_modifier: public_access
+      - name: AVG_RESPIRATION
+        description: Average respiratory rate.
+        expr: AVG(predictions.respiration)
+        access_modifier: public_access
+      - name: AVG_RISK_SCORE_PCT
+        synonyms:
+          - average risk score
+        description: Average patient risk score percentage (0-100).
+        expr: AVG(predictions.risk_score_pct)
+        access_modifier: public_access
+      - name: AVG_SYSTOLIC_BP
+        description: Average systolic blood pressure.
+        expr: AVG(predictions.systolic_bp)
+        access_modifier: public_access
+      - name: HIGH_RISK_PATIENT_COUNT
+        description: Number of High risk band patients (Code Blue probability >= 0.7).
+        expr: COUNT_IF(predictions.codeblue_probability >= 0.7)
+        access_modifier: public_access
+      - name: MAX_CODEBLUE_PROBABILITY
+        description: Highest predicted Code Blue probability.
+        expr: MAX(predictions.codeblue_probability)
+        access_modifier: public_access
+      - name: MODEL_ACCURACY
+        description: Fraction of patients where prediction matched actual outcome.
+        expr: "AVG(IFF(predictions.actual_codeblue_flag = predictions.predicted_codeblue_flag, 1, 0))"
+        access_modifier: public_access
+      - name: MODEL_PRECISION
+        description: "Precision: true positives / predicted positives."
+        expr: "SUM(IFF(predictions.actual_codeblue_flag = 1 AND predictions.predicted_codeblue_flag = 1, 1, 0)) / NULLIF(SUM(predictions.predicted_codeblue_flag), 0)"
+        access_modifier: public_access
+      - name: MODEL_RECALL
+        synonyms:
+          - sensitivity
+        description: "Recall: true positives / actual positives."
+        expr: "SUM(IFF(predictions.actual_codeblue_flag = 1 AND predictions.predicted_codeblue_flag = 1, 1, 0)) / NULLIF(SUM(predictions.actual_codeblue_flag), 0)"
+        access_modifier: public_access
+      - name: PATIENT_COUNT
+        synonyms:
+          - number of patients
+        description: Number of distinct patients.
+        expr: COUNT(DISTINCT predictions.primary_mrn)
+        access_modifier: public_access
+      - name: POSITIVE_BLOOD_CULTURE_COUNT
+        description: Number of patients with positive blood culture.
+        expr: SUM(predictions.blood_culture_flag)
+        access_modifier: public_access
+      - name: PREDICTED_CODEBLUE_COUNT
+        description: Number of predicted Code Blue events.
+        expr: SUM(predictions.predicted_codeblue_flag)
+        access_modifier: public_access
+      - name: PREDICTED_CODEBLUE_RATE
+        description: Share of patients predicted to have a Code Blue (0-1).
+        expr: AVG(predictions.predicted_codeblue_flag)
+        access_modifier: public_access
+module_custom_instructions:
+  sql_generation: High-risk patients means risk_band = High (codeblue_probability >= 0.7). Medium is > 0.3 and < 0.7; Low is <= 0.3. Show risk scores as risk_score_pct (0-100) unless the user asks for probability. Order high-risk patient lists by risk_score_pct descending.
+verified_queries:
+  - name: TOP_RISK_PATIENTS
+    sql: "SELECT primary_mrn, risk_score_pct, risk_band, age_years, gender, top_risk_driver_1, top_risk_driver_2, top_risk_driver_3 FROM predictions WHERE risk_band = 'High' ORDER BY risk_score_pct DESC NULLS LAST LIMIT 20"
+    question: Which patients have the highest predicted Code Blue risk?
+    use_as_onboarding_question: true
+  - name: PATIENTS_PROB_GT_80
+    sql: SELECT COUNT(DISTINCT primary_mrn) AS patient_count FROM predictions WHERE codeblue_probability > 0.8
+    question: How many patients have a prediction probability greater than 80%?
+    use_as_onboarding_question: false
+  - name: HIGH_RISK_AVG_VITALS
+    sql: "SELECT COUNT(DISTINCT primary_mrn) AS patient_count, AVG(pulse) AS avg_pulse, AVG(systolic_bp) AS avg_systolic_bp, AVG(diastolic_bp) AS avg_diastolic_bp, AVG(respiration) AS avg_respiration, AVG(pulse_oximetry) AS avg_pulse_oximetry, AVG(temperature) AS avg_temperature, AVG(o2_flow_rate) AS avg_o2_flow_rate FROM predictions WHERE risk_band = 'High'"
+    question: What are the average vital signs for high-risk patients?
+    use_as_onboarding_question: true
+  - name: RISK_BY_AGE_GROUP
+    sql: "SELECT age_group, COUNT(DISTINCT primary_mrn) AS patient_count, AVG(risk_score_pct) AS avg_risk_score_pct, COUNT_IF(risk_band = 'High') AS high_risk_patient_count, AVG(actual_codeblue_flag) AS actual_codeblue_rate FROM predictions GROUP BY age_group ORDER BY avg_risk_score_pct DESC NULLS LAST"
+    question: Which age groups have the highest Code Blue risk?
+    use_as_onboarding_question: true
+  - name: PREDICTIONS_BY_GENDER
+    sql: "SELECT gender, COUNT(DISTINCT primary_mrn) AS patient_count, SUM(predicted_codeblue_flag) AS predicted_codeblue_count, SUM(actual_codeblue_flag) AS actual_codeblue_count, AVG(risk_score_pct) AS avg_risk_score_pct, COUNT_IF(risk_band = 'High') AS high_risk_patient_count FROM predictions GROUP BY gender ORDER BY gender"
+    question: Show Code Blue predictions by gender.
+    use_as_onboarding_question: false
+  - name: HIGH_RISK_TOP_DRIVERS
+    sql: "SELECT top_risk_driver_1, COUNT(DISTINCT primary_mrn) AS patient_count, AVG(risk_score_pct) AS avg_risk_score_pct FROM predictions WHERE risk_band = 'High' GROUP BY top_risk_driver_1 ORDER BY patient_count DESC NULLS LAST"
+    question: What clinical factors are most common among high-risk patients?
+    use_as_onboarding_question: true
+  - name: HIGH_RISK_LAST_30_DAYS
+    sql: "SELECT COUNT(DISTINCT primary_mrn) AS high_risk_patient_count FROM predictions WHERE risk_band = 'High' AND entry_date >= DATEADD(day, -30, CURRENT_DATE())"
+    question: How many patients were classified as high risk during the last 30 days?
+    use_as_onboarding_question: false
+  - name: PROBABILITY_DISTRIBUTION
+    sql: "SELECT probability_bucket, COUNT(DISTINCT primary_mrn) AS patient_count FROM predictions GROUP BY probability_bucket ORDER BY probability_bucket"
+    question: What is the distribution of prediction probabilities?
+    use_as_onboarding_question: false
+  - name: ABNORMAL_BNP_HIGH_RISK
+    sql: "SELECT primary_mrn, bnp, risk_score_pct, risk_band, age_years, gender, top_risk_driver_1 FROM predictions WHERE bnp > 100 AND codeblue_probability >= 0.7 ORDER BY risk_score_pct DESC NULLS LAST"
+    question: Show patients with abnormal BNP and high Code Blue probability.
+    use_as_onboarding_question: false
+  - name: RISK_ACROSS_AGE_CATEGORIES
+    sql: "SELECT age_group, risk_band, COUNT(DISTINCT primary_mrn) AS patient_count, AVG(risk_score_pct) AS avg_risk_score_pct FROM predictions GROUP BY age_group, risk_band ORDER BY age_group, risk_band"
+    question: Compare Code Blue risk across different age categories.
+    use_as_onboarding_question: false
+  - name: MODEL_PERFORMANCE
+    sql: "SELECT model_version, COUNT(DISTINCT primary_mrn) AS patient_count, AVG(IFF(actual_codeblue_flag = predicted_codeblue_flag, 1, 0)) AS model_accuracy, SUM(IFF(actual_codeblue_flag = 1 AND predicted_codeblue_flag = 1, 1, 0)) / NULLIF(SUM(predicted_codeblue_flag), 0) AS model_precision, SUM(IFF(actual_codeblue_flag = 1 AND predicted_codeblue_flag = 1, 1, 0)) / NULLIF(SUM(actual_codeblue_flag), 0) AS model_recall FROM predictions GROUP BY model_version"
+    question: How accurate is the Code Blue prediction model?
+    use_as_onboarding_question: false
+  - name: MONTHLY_RISK_TREND
+    sql: "SELECT admission_month, COUNT(DISTINCT primary_mrn) AS patient_count, COUNT_IF(risk_band = 'High') AS high_risk_patient_count, AVG(risk_score_pct) AS avg_risk_score_pct FROM predictions GROUP BY admission_month ORDER BY admission_month"
+    question: What is the monthly trend of high-risk patients?
+    use_as_onboarding_question: false

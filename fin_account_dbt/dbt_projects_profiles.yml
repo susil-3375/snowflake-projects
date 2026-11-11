@@ -1,0 +1,21 @@
+fin_account_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: ""
+      user: ""
+      role: FIN_DBT_DEV_ROLE
+      database: FIN_DB
+      warehouse: FIN_DBT_WH
+      schema: SILVER
+      threads: 4
+    prod:
+      type: snowflake
+      account: ""
+      user: ""
+      role: FIN_DBT_DEV_ROLE
+      database: FIN_DB
+      warehouse: FIN_DBT_WH
+      schema: SILVER
+      threads: 4

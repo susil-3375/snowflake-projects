@@ -1,0 +1,12 @@
+version: 2
+sources:
+  - name: raw
+    database: FIN_DB
+    schema: RAW
+    tables:
+      - name: vw_account_src
+        identifier: VW_ACCOUNT_SRC
+        loaded_at_field: ingested_ts
+        freshness:
+          warn_after: { count: 26, period: hour }
+          error_after: { count: 48, period: hour }

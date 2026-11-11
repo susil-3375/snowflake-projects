@@ -1,0 +1,134 @@
+name: INCIDENT_ANALYTICS_SV
+description: IT support incident analytics
+tables:
+  - name: CI
+    description: Configuration items
+    base_table:
+      database: IT_SUPPORT_DB
+      schema: SERVICENOW
+      table: CMDB_CI
+    primary_key:
+      columns:
+        - SYS_ID
+    dimensions:
+      - name: CI_LOCATION
+        expr: ci.LOCATION
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: CI_NAME
+        expr: ci.NAME
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+  - name: INC
+    description: "ServiceNow incidents enriched with AI category, summary, root cause, recommendation, priority score"
+    base_table:
+      database: IT_SUPPORT_DB
+      schema: SERVICENOW
+      table: INCIDENT_ENRICHED
+    primary_key:
+      columns:
+        - NUMBER
+    dimensions:
+      - name: ASSIGNMENT_GROUP
+        expr: inc.ASSIGNMENT_GROUP
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: CATEGORY
+        synonyms:
+          - incident category
+          - type
+        description: "Network, Hardware, Software, Security, Access Management"
+        expr: inc.AI_CATEGORY
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: INCIDENT_NUMBER
+        expr: inc.NUMBER
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: OPENED_AT
+        expr: inc.OPENED_AT
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: OPENED_WEEK
+        expr: "DATE_TRUNC('week', inc.OPENED_AT)"
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: PRIORITY
+        description: 1=Critical .. 5=Planning
+        expr: inc.PRIORITY
+        data_type: "NUMBER(4,0)"
+        access_modifier: public_access
+      - name: RESOLVED_AT
+        expr: inc.RESOLVED_AT
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: RESOLVED_WEEK
+        expr: "DATE_TRUNC('week', inc.RESOLVED_AT)"
+        data_type: TIMESTAMP_NTZ(9)
+        access_modifier: public_access
+      - name: ROOT_CAUSE
+        expr: inc.AI_ROOT_CAUSE
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: SHORT_DESCRIPTION
+        expr: inc.SHORT_DESCRIPTION
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+      - name: STATE
+        description: "New, In Progress, On Hold, Resolved, Closed"
+        expr: inc.STATE
+        data_type: VARCHAR(11)
+        access_modifier: public_access
+      - name: STATUS_GROUP
+        description: Open or Resolved
+        expr: inc.STATUS_GROUP
+        data_type: VARCHAR(8)
+        access_modifier: public_access
+    metrics:
+      - name: AVG_PRIORITY_SCORE
+        expr: AVG(inc.PRIORITY_SCORE)
+        access_modifier: public_access
+      - name: INCIDENT_COUNT
+        expr: COUNT(inc.NUMBER)
+        access_modifier: public_access
+      - name: MTTR_HOURS
+        synonyms:
+          - MTTR
+          - mean time to resolve
+        description: Mean time to resolve in hours
+        expr: AVG(inc.RESOLUTION_HOURS)
+        access_modifier: public_access
+      - name: OPEN_INCIDENTS
+        description: "Backlog: unresolved incidents"
+        expr: COUNT_IF(inc.STATUS_GROUP='Open')
+        access_modifier: public_access
+      - name: RESOLVED_INCIDENTS
+        expr: COUNT_IF(inc.STATUS_GROUP='Resolved')
+        access_modifier: public_access
+  - name: USR
+    description: Callers
+    base_table:
+      database: IT_SUPPORT_DB
+      schema: SERVICENOW
+      table: SYS_USER
+    primary_key:
+      columns:
+        - SYS_ID
+    dimensions:
+      - name: DEPARTMENT
+        expr: usr.DEPARTMENT
+        data_type: VARCHAR(16777216)
+        access_modifier: public_access
+relationships:
+  - name: INC_CI
+    left_table: INC
+    right_table: CI
+    relationship_columns:
+      - left_column: CMDB_CI
+        right_column: SYS_ID
+  - name: INC_USR
+    left_table: INC
+    right_table: USR
+    relationship_columns:
+      - left_column: CALLER_ID
+        right_column: SYS_ID

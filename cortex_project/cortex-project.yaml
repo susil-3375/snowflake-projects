@@ -1,0 +1,12 @@
+version: 1
+artifacts:
+  - path: INCIDENT_ANALYTICS_SV.sv.yaml
+    type: semantic_view
+    targets:
+      default:
+        object: IT_SUPPORT_DB.SERVICENOW.INCIDENT_ANALYTICS_SV
+  - path: CODEBLUE_PREDICTION_SV.sv.yaml
+    type: semantic_view
+    targets:
+      default:
+        object: DEMO_DB.CLINIC.CODEBLUE_PREDICTION_SV
